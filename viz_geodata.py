@@ -26,7 +26,8 @@ class VizGeoData:
         return points
 
     def bounding_box(self, bounds):
-        bounds = self.points.total_bounds
+        excluded = self.points[(self.points.index >206) & (self.points.index < 208)]
+        bounds = excluded.total_bounds
         extended_bounds = [bounds[0]-1000, bounds[1]-1000, bounds[2]+1000, bounds[3] + 1000]
         gdal_bounds = [extended_bounds[0], extended_bounds[3], extended_bounds[2], extended_bounds[1]]
         return gdal_bounds
@@ -129,18 +130,7 @@ class VizGeoData:
         # for name in ['fitnahtemp', 'fitnahuhispace', 'fitnahuhistreet']:
         #     self.raster_to_png(Path.cwd() / 'cutdata' / self.raster_paths[name], base / f'{name}.png')
 
-    def fix_geojson(self, name, min_area=100, simplify_tolerance=0.1):
-        load = Path.cwd() / 'cutdata' / name
-        save = Path.cwd() / 'vizdata'
-        save.mkdir(exist_ok=True)
-
-        gdf = gpd.read_file(load)
-        # Simplify geometries to smooth edges
-        gdf['geometry'] = gdf['geometry'].simplify(tolerance=simplify_tolerance, preserve_topology=True)
-        gdf = gdf[gdf['geometry'].area > min_area]
-        gdf.to_file(save / name)
 
 vgd= VizGeoData()
 vgd.crop_all_rasters()
-vgd.prepare_visualization()
-vgd.fix_geojson('landuse.geojson')
+vgd.prepare_visualization(contour_interval=10)
