@@ -6,9 +6,9 @@ from osgeo import gdal, ogr, osr
 import pandas as pd
 gdal.DontUseExceptions()
 
-class VizGeoData:
+class PrepGeoDataViz:
     def __init__(self, points_path = '/home/tge/masterthesis/database/sensorpoints', bounds = 1000):
-        self.points = VizGeoData.load_points(points_path)
+        self.points = PrepGeoDataViz.load_points(points_path)
         self.bbox = self.bounding_box(bounds)
         self.raster_paths = dict(fitnahtemp='/home/tge/masterthesis/database/fitnahtemp/reprojected_temp.tif',
                                  fitnahuhispace='/home/tge/masterthesis/database/fitnahuhi/winss20n_reproj.tif',
@@ -56,36 +56,6 @@ class VizGeoData:
         for name, path in self.raster_paths.items():
             self.crop_raster(path,name)
 
-    def raster_to_geojson(self, input_raster_path, output_geojson_path):
-        # Open the source raster
-        src_ds = gdal.Open(str(input_raster_path))
-        srcband = src_ds.GetRasterBand(1)
-
-        # Prepare the output GeoJSON
-        driver = ogr.GetDriverByName('GeoJSON')
-        if os.path.exists(output_geojson_path):
-            driver.DeleteDataSource(output_geojson_path)
-        out_ds = driver.CreateDataSource(str(output_geojson_path))
-
-        # Create the spatial reference
-        srs = osr.SpatialReference()
-        srs.ImportFromWkt(src_ds.GetProjection())
-
-        # Create the layer
-        out_layer = out_ds.CreateLayer(str(output_geojson_path), srs=srs)
-
-        # Add an ID field
-        id_field = ogr.FieldDefn("id", ogr.OFTInteger)
-        out_layer.CreateField(id_field)
-
-        # Polygonize
-        gdal.Polygonize(srcband, None, out_layer, 0, [], callback=None)
-        print('polygonized')
-
-        # Cleanup
-        src_ds = None
-        out_ds = None
-
     def raster_to_contours(self, input_raster_path, output_geojson_path, contour_interval):
         # Open the source raster
         output_geojson_path = str(output_geojson_path)
@@ -117,20 +87,32 @@ class VizGeoData:
         src_ds = None
         out_ds = None
 
-    def raster_to_png(self, input_raster_path, output_png_path):
-        # Convert raster to PNG for direct visualization
-        src_ds = gdal.Open(input_raster_path)
-        gdal.Translate(output_png_path, src_ds, format='PNG')
-        src_ds = None
-
     def prepare_visualization(self, contour_interval=20):
         self.crop_all_rasters()
-        self.raster_to_geojson(Path.cwd() / 'cutdata' / 'landuse.tif', Path.cwd() / 'cutdata' / 'landuse.geojson')
         self.raster_to_contours(Path.cwd() / 'cutdata' / 'dem.tif', Path.cwd() / 'cutdata' / 'dem.geojson', contour_interval)
-        # for name in ['fitnahtemp', 'fitnahuhispace', 'fitnahuhistreet']:
-        #     self.raster_to_png(Path.cwd() / 'cutdata' / self.raster_paths[name], base / f'{name}.png')
 
 
-vgd= VizGeoData()
+vgd= PrepGeoDataViz()
 vgd.crop_all_rasters()
 vgd.prepare_visualization(contour_interval=10)
+
+def check_geojson(landuse_path):
+    # Load the GeoDataFrame from the GeoJSON file
+    gdf = gpd.read_file(landuse_path)
+
+    # Print the first few rows of the GeoDataFrame
+    print(gdf.head())
+    print(gdf.crs)
+
+    # Print the total number of rows in the GeoDataFrame
+    print(f"Total rows: {len(gdf)}")
+
+    # Check if there are any missing values in the GeoDataFrame
+    print("Missing values:")
+    print(gdf.isnull().sum())
+
+    # Check the coordinate reference system of the GeoDataFrame
+    print(f"Coordinate reference system: {gdf.crs}")
+
+# Call the function with the path to your GeoJSON file
+check_geojson('/vizdata/landuseqgis.geojson')
