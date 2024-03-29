@@ -3,11 +3,11 @@ import numpy as np
 import pandas as pd
 import rasterio
 from rasterio.mask import mask
+from pathlib import Path
+import streamlit as st
 
-
-# noinspection PyTypeChecker,PyMethodMayBeStatic
-class DataCollector:
-    def __init__(self, buffer_list):
+class GeoDataCollector:
+    def __init__(self, parameters):
 
         self.raster_paths = dict(fitnahtemp='/home/tge/masterthesis/database/fitnahtemp/reprojected_temp.tif',
                                  fitnahuhispace='/home/tge/masterthesis/database/fitnahuhi/winss20n_reproj.tif',
@@ -15,22 +15,21 @@ class DataCollector:
                                  dem='/home/tge/masterthesis/database/dem_ch/dem25.tif',
                                  landuse='/home/tge/masterthesis/database/landuse/ntzg10m_final_ug_mrandom_rev00.tif'
                                  )
-
         self.shape_paths = dict(wind='/home/tge/masterthesis/database/Strömung')
-        self.buffers = buffer_list
-        self.points = DataCollector.load_points()
+        self.points = GeoDataCollector.load_points()
+        self.buffers = parameters['buffers']
+        self.data_paths = {k:v for k,v in self.raster_paths.items() if k in parameters['data']}
+
+
 
     @staticmethod
     def load_points():
-        points = gpd.read_file('/home/tge/masterthesis/database/sensorpoints')
+        points = gpd.read_file(Path.cwd() / 'sensorpoints')
         names = points.Name.str.split(' ', expand=True)[1]
         names = pd.to_numeric(names, errors='coerce')
         points.Name = names
         points = points.dropna(subset='Name').sort_values(by='Name').set_index('Name', drop=True)
         return points
-
-    def load_shape(self):
-        pass
 
     @property
     def create_buffers(self):
@@ -90,7 +89,7 @@ class DataCollector:
 
     def get_landuse_stats(self):
         buffer_geometries = self.create_buffers  # Assuming this returns a GeoDataFrame with geometries as columns
-        with rasterio.open(self.raster_paths['landuse']) as src:
+        with rasterio.open(self.data_paths['landuse']) as src:
             # If unique categories are not predefined, you could determine them dynamically:
             entire_image = src.read(1)
             unique_categories = np.unique(entire_image)
@@ -110,7 +109,7 @@ class DataCollector:
 
     def calculate_rasters(self):
         buffered_data = []
-        for name, path in self.raster_paths.items():
+        for name, path in self.data_paths.items():
             if name == 'landuse':
                 continue
             else:
@@ -121,7 +120,3 @@ class DataCollector:
         return data
 
 
-buffers: list[int] = [5, 10, 20, 50, 75, 100, 150, 200, 300, 500]
-dc = DataCollector(buffers)
-all_data = dc.calculate_rasters()
-lu_data = dc.get_landuse_stats()
