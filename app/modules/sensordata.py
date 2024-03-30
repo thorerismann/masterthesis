@@ -1,8 +1,8 @@
 import sqlite3
 from pathlib import Path
-import streamlit as st
 import xarray as xr
 import pandas as pd
+import streamlit as st
 
 
 class StationData:
@@ -12,8 +12,16 @@ class StationData:
         self.station_data = None
         self.rural_data = None
 
+    def resample_data(self, ds):
+        if self.meta['resampling'] == 'hourly':
+            ds = ds.resample(time='H' ).mean()
+        if self.meta['resampling'] == 'daily':
+            ds = ds.resample(time='D').mean()
+        return ds
+
     def get_biel_stations(self):
         ds = xr.open_dataset('/home/tge/masterthesis/database/sensordata/biel23.nc')
+        ds = self.resample_data(ds)
         df = ds.to_dataframe().reset_index()
         df.set_index('time', inplace=True, drop=True)
         rural = df[(df.logger == 206) | (df.logger == 207)]
@@ -38,18 +46,15 @@ class StationData:
             if 'city_index' in self.meta['dependent']:
                 airtemp_mean = airtemp.mean(axis=1)
                 city_diffs = airtemp.sub(airtemp_mean, axis=0)
-                st.write(city_diffs)
                 city_diffs.to_sql(name='cityindex', con=conn, if_exists='replace',index=True)
                 airtemp_mean.to_sql(name='citymean', con=conn, if_exists='replace', index=True)
             if 'uhi' in self.meta['dependent']:
                 airtemp_rural = rural.reset_index().pivot(index='time', columns='logger', values='temperature')
                 airtemp_rural_mean = airtemp_rural.mean(axis=1)
                 uhi = airtemp.sub(airtemp_rural_mean,axis=0)
-                st.write('uhi')
                 uhi.to_sql(name='uhi',con=conn, if_exists='replace', index=True)
                 rural.to_sql(name='ruralmean', con=conn, if_exists='replace', index=True)
             if 'airtemp' in self.meta['dependent']:
-                st.write('airtemp')
                 airtemp.to_sql(name='airtemp', con=sqlite3.connect('biel.db'), if_exists='replace')
                 rural.to_sql(name='rural', con=sqlite3.connect('biel.db'), if_exists='replace')
 
