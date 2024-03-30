@@ -1,3 +1,5 @@
+import sqlite3
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -106,6 +108,16 @@ class GeoDataCollector:
                     buffered_data.append(land_use_counts)
 
         return pd.DataFrame(buffered_data)
+
+    def save_buffered_data(self):
+        data = self.calculate_rasters()
+        path = Path.cwd() / st.session_state.foldername / 'geodata.db'
+        st.write(f"Saving data to {path}")
+        st.write(data)
+        with sqlite3.connect(path) as conn:
+            for dtype in data.dtype.unique():
+                mydata = data[data.dtype == dtype].set_index(['buffer', 'logger']).drop(columns='dtype')
+                mydata.to_sql(dtype, con=conn, if_exists='replace')
 
     def calculate_rasters(self):
         buffered_data = []
