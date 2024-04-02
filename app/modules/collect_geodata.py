@@ -20,7 +20,8 @@ class GeoDataCollector:
         self.shape_paths = dict(wind='/home/tge/masterthesis/database/Strömung')
         self.points = GeoDataCollector.load_points()
         self.buffers = parameters['buffers']
-        self.data_paths = {k:v for k,v in self.raster_paths.items() if k in parameters['data']}
+        self.temp_path = {k:v for k,v in self.raster_paths.items() if k in parameters['temp']}
+        self.feature_path = {k:v for k,v in self.raster_paths.items() if k in parameters['feature']}
 
 
 
@@ -91,7 +92,7 @@ class GeoDataCollector:
 
     def get_landuse_stats(self):
         buffer_geometries = self.create_buffers  # Assuming this returns a GeoDataFrame with geometries as columns
-        with rasterio.open(self.data_paths['landuse']) as src:
+        with rasterio.open(self.temp_path['landuse']) as src:
             # If unique categories are not predefined, you could determine them dynamically:
             entire_image = src.read(1)
             unique_categories = np.unique(entire_image)
@@ -121,13 +122,16 @@ class GeoDataCollector:
 
     def calculate_rasters(self):
         buffered_data = []
-        for name, path in self.data_paths.items():
-            if name == 'landuse':
-                continue
-            else:
-                data = self.get_raster_stats(path)
-                data['dtype'] = name
-                buffered_data.append(data)
+        for name, path in self.temp_path.items():
+            data = self.get_raster_stats(path)
+            data['dtype'] = name
+            buffered_data.append(data)
+        st.write(len(buffered_data))
+        for name, path in self.feature_path.items():
+            data = self.get_raster_stats(path)
+            data['dtype'] = name
+            buffered_data.append(data)
+        st.write(len(buffered_data))
         data = pd.concat(buffered_data)
         return data
 

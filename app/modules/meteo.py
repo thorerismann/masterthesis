@@ -19,8 +19,6 @@ class MeteoData:
                        'ure200s0': 'humidity', 'fve010z0': 'windspeed',
                        'dkl010z0': 'winddir'}
         self.path = '/home/tge/masterthesis/database/meteo/biel_23.txt'
-        self.rename_cols =rename_cols = {'tre200s0': 'airt', 'rre150z0': 'precip', 'ure200s0': 'relhum', 'fve010z0': 'wspd', 'dkl010z0': 'wdir'}
-
     def get_meteo_data(self):
         """Load the meteo data from the file"""
         df = pd.read_table(self.path, sep=r'\s+', skiprows=1)
@@ -48,7 +46,6 @@ class MeteoData:
         :return: DataFrame
         """
         df = self.prepare_meteo_data()
-        st.write(df)
         station = ''
         if self.meteometa['station'] == 'grenchen':
             station = 'GRE'
@@ -59,8 +56,6 @@ class MeteoData:
         return selected
 
     def resample_data(self, df):
-        st.write('Resampling data')
-        st.write(df)
         if self.datameta['resampling'] == 'hourly':
             df = df.resample('H').mean()
         if self.datameta['resampling'] == 'daily':
@@ -75,7 +70,5 @@ class MeteoData:
         selected = self.select_station_data()
         resampled = self.resample_data(selected)
         path = Path.cwd() / st.session_state.foldername / 'meteo.db'
-        st.write('Writing meteo data to database')
-        st.write(resampled)
         with sqlite3.connect(path) as conn:
             resampled.to_sql(name='meteo', con=conn, if_exists='replace')

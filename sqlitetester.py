@@ -13,7 +13,7 @@ def test_database_structure(path):
     print(tables)
     c.close()
 
-path='/home/tge/masterthesis/app/temp5/geodata.db'
+path='/home/tge/masterthesis/app/temp/geodata.db'
 test_database_structure(path)
 
 print('hi')
@@ -27,8 +27,7 @@ def test_table_contents(path, table):
 
 datatables = [('fitnahtemp',), ('fitnahuhistreet',), ('dem',)]
 
-fitnah = test_table_contents(path, 'fitnahtemp')
-fitnahuhistreet = test_table_contents(path, 'fitnahuhistreet')
-dem = test_table_contents(path, 'dem')
+fitnah = test_table_contents(path, 'meteo')
+print(fitnah)
 print('hello to debug')
 print('last ol debug')
