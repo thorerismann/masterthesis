@@ -5,7 +5,9 @@ import pandas as pd
 import streamlit as st
 
 
+
 class StationData:
+
     def __init__(self, meta):
         self.meta = meta
         self.city = 'biel'
@@ -57,4 +59,5 @@ class StationData:
             if 'airtemp' in self.meta['dependent']:
                 airtemp.to_sql(name='airtemp', con=sqlite3.connect('biel.db'), if_exists='replace')
                 rural.to_sql(name='rural', con=sqlite3.connect('biel.db'), if_exists='replace')
+
 
