@@ -48,7 +48,7 @@ class PrepGeoDataViz:
         # Perform the cropping and save the result
         base = Path.cwd() / 'cutdata'
         base.mkdir(exist_ok=True)
-        gdal.Translate(Path.cwd() / 'cutdata' / f'{name}.tif', src_ds, options=translate_options)
+        gdal.Translate(f'/home/tge/masterthesis/cutdata/{name}.tif', src_ds, options=translate_options)
         # Clean up
         src_ds = None
 
@@ -89,30 +89,9 @@ class PrepGeoDataViz:
 
     def prepare_visualization(self, contour_interval=20):
         self.crop_all_rasters()
-        self.raster_to_contours(Path.cwd() / 'cutdata' / 'dem.tif', Path.cwd() / 'cutdata' / 'dem.geojson', contour_interval)
+        self.raster_to_contours(f'/home/tge/masterthesis/cutdata/dem.tif', f'/home/tge/masterthesis/cutdata/dem.geojson', contour_interval)
 
 
 vgd= PrepGeoDataViz()
 vgd.crop_all_rasters()
 vgd.prepare_visualization(contour_interval=10)
-
-def check_geojson(landuse_path):
-    # Load the GeoDataFrame from the GeoJSON file
-    gdf = gpd.read_file(landuse_path)
-
-    # Print the first few rows of the GeoDataFrame
-    print(gdf.head())
-    print(gdf.crs)
-
-    # Print the total number of rows in the GeoDataFrame
-    print(f"Total rows: {len(gdf)}")
-
-    # Check if there are any missing values in the GeoDataFrame
-    print("Missing values:")
-    print(gdf.isnull().sum())
-
-    # Check the coordinate reference system of the GeoDataFrame
-    print(f"Coordinate reference system: {gdf.crs}")
-
-# Call the function with the path to your GeoJSON file
-check_geojson('/vizdata/landuseqgis.geojson')

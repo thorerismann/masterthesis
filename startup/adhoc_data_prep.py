@@ -1,15 +1,79 @@
+from pathlib import Path
 import sqlite3
 
-import geopandas as gpd
 import numpy as np
-import pandas as pd
 import rasterio
+import xarray as xr
+import pandas as pd
+import geopandas as gpd
 from rasterio.mask import mask
-from pathlib import Path
-import streamlit as st
+
+
+class PrepareData:
+    def __init__(self):
+        self.meteo_path_23 = '/home/tge/masterthesis/database/meteo/biel_23.txt'
+        self.meteo_path_22 = '/home/tge/masterthesis/database/meteo/biel_22.txt'
+        self.biel_path_23 = '/home/tge/masterthesis/database/sensordata/biel23.nc'
+        self.biel_path_22 = '/home/tge/masterthesis/database/sensordata/biel22.nc'
+
+    def format_meteo(self, meteo_path, skiprows):
+        """Format meteo data for use in the model."""
+        df = pd.read_table(meteo_path, sep=r'\s+', skiprows=skiprows)
+        df['time'] = pd.to_datetime(df['time'], format='%Y%m%d%H%M', errors='coerce')
+        rename_cols = {
+            'tre200s0': 'airtemp',
+            'rre150z0': 'precipitation',
+            'ure200s0': 'humidity',
+            'fve010z0': 'windspeed',
+            'dkl010z0': 'winddir'
+        }
+        df = df.rename(columns=rename_cols)
+        df = df[df.stn == 'GRE']
+        airtemp = df[['time', 'airtemp', 'humidity']].dropna()
+        airtemp.set_index('time', inplace=True)
+        return airtemp
+
+    def combine_meteo_data(self):
+        airtemp_23 = self.format_meteo(self.meteo_path_23, 1)
+        airtemp_22 = self.format_meteo(self.meteo_path_22, 0)
+        combined = pd.concat([airtemp_23, airtemp_22])
+        print(combined)
+        directory = Path('/home/tge/masterthesis/app/database')
+        directory.mkdir(exist_ok=True)
+        combined.reset_index().to_csv(directory / 'meteo.csv', index=False)
+
+
+    def format_station_data(self):
+        ds23 = xr.open_dataset(self.biel_path_23)
+        temp23 = ds23.to_dataframe().reset_index()
+        temp23 = temp23[['time', 'logger', 'temperature']].copy()
+        temp23 = temp23.dropna()
+        ds22 = xr.open_dataset(self.biel_path_22)
+        temp22 = ds22.to_dataframe().reset_index()
+        temp22 = temp22.rename(columns={'sensor': 'logger', 'temp': 'temperature'})
+        temp22 = temp22[['time', 'logger', 'temperature']].copy()
+        temp22['logger'] = pd.to_numeric(temp22['logger'], errors='coerce')
+        temp22 = temp22.dropna()
+        print(temp22)
+        temp22['logger'] = temp22['logger'].astype(int)
+        df = pd.concat([temp22, temp23])
+        df = df.sort_values(['time', 'logger'])
+        path = Path('/home/tge/masterthesis/app/database')
+        path.mkdir(exist_ok=True)
+        df.to_csv(path / 'stations.csv', index=False)
+
+    def collect_geodata(self):
+        pass
+
+
+
+dataprep = PrepareData()
+dataprep.combine_meteo_data()
+stationdata = dataprep.format_station_data()
+print('meteo and sensor data prepped')
 
 class GeoDataCollector:
-    def __init__(self, parameters):
+    def __init__(self):
 
         self.raster_paths = dict(fitnahtemp='/home/tge/masterthesis/database/fitnahtemp/reprojected_temp.tif',
                                  fitnahuhispace='/home/tge/masterthesis/database/fitnahuhi/winss20n_reproj.tif',
@@ -18,15 +82,15 @@ class GeoDataCollector:
                                  landuse='/home/tge/masterthesis/database/landuse/ntzg10m_final_ug_mrandom_rev00.tif'
                                  )
         self.shape_paths = dict(wind='/home/tge/masterthesis/database/Strömung')
-        self.points = GeoDataCollector.load_points()
-        self.buffers = parameters['buffers']
-        self.temp_path = {k:v for k,v in self.raster_paths.items() if k in parameters['temp']}
-        self.feature_path = {k:v for k,v in self.raster_paths.items() if k in parameters['feature']}
+        self.point_path = '/home/tge/masterthesis/app/database/sensorpoints'
+        self.save_path = '/home/tge/masterthesis/app/database'
+        self.points = GeoDataCollector.load_points(self.point_path)
+        self.buffers = [5, 10, 20, 50, 75, 100, 150, 200, 250, 300, 500, 750, 1000]
 
 
     @staticmethod
-    def load_points():
-        points = gpd.read_file(Path.cwd() / 'sensorpoints')
+    def load_points(points_path):
+        points = gpd.read_file(points_path)
         names = points.Name.str.split(' ', expand=True)[1]
         names = pd.to_numeric(names, errors='coerce')
         points.Name = names
@@ -91,7 +155,7 @@ class GeoDataCollector:
 
     def get_landuse_stats(self):
         buffer_geometries = self.create_buffers  # Assuming this returns a GeoDataFrame with geometries as columns
-        with rasterio.open(self.temp_path['landuse']) as src:
+        with rasterio.open(self.raster_paths['landuse']) as src:
             # If unique categories are not predefined, you could determine them dynamically:
             entire_image = src.read(1)
             unique_categories = np.unique(entire_image)
@@ -111,27 +175,23 @@ class GeoDataCollector:
 
     def save_buffered_data(self):
         data = self.calculate_rasters()
-        path = Path.cwd() / st.session_state.foldername / 'geodata.db'
-        st.write(f"Saving data to {path}")
-        st.write(data)
-        with sqlite3.connect(path) as conn:
-            for dtype in data.dtype.unique():
-                mydata = data[data.dtype == dtype].set_index(['buffer', 'logger']).drop(columns='dtype')
-                mydata.to_sql(dtype, con=conn, if_exists='replace')
+        Path(self.save_path).mkdir(exist_ok=True)
+        path = Path(self.save_path) / 'buffered_data.csv'
+        data = data[data['dtype'] != 'landuse']
+        data.to_csv(path, index=False)
+        data_lu = self.get_landuse_stats()
+        path_lu = Path(self.save_path) / 'buffered_landuse.csv'
+        data_lu.to_csv(path_lu, index=False)
 
     def calculate_rasters(self):
         buffered_data = []
-        for name, path in self.temp_path.items():
+        for name, path in self.raster_paths.items():
             data = self.get_raster_stats(path)
             data['dtype'] = name
             buffered_data.append(data)
-        st.write(len(buffered_data))
-        for name, path in self.feature_path.items():
-            data = self.get_raster_stats(path)
-            data['dtype'] = name
-            buffered_data.append(data)
-        st.write(len(buffered_data))
         data = pd.concat(buffered_data)
         return data
 
-
+gdc = GeoDataCollector()
+gdc.save_buffered_data()
+print('geodata saved')
